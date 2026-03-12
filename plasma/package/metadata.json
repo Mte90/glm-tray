@@ -1,0 +1,21 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "",
+                "Name": "Mte90"
+            }
+        ],
+        "Category": "Online Services",
+        "Description": "Monitor and manage Z.ai / BigModel API keys in the KDE Plasma panel",
+        "EnabledByDefault": true,
+        "Icon": "network-server",
+        "Id": "com.github.mte90.glm_tray",
+        "License": "MIT",
+        "Name": "GLM Tray",
+        "Version": "0.0.4",
+        "Website": "https://github.com/Mte90/glm-tray"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}
