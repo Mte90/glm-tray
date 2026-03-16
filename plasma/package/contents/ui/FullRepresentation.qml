@@ -97,7 +97,7 @@ PlasmaExtras.Representation {
     }
 
     // ── Content ───────────────────────────────────────────────────────────
-    contentItem: PlasmaExtras.ScrollArea {
+    contentItem: Controls.ScrollView {
         id: scrollArea
         contentWidth: availableWidth
 
