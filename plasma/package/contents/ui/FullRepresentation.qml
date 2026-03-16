@@ -198,7 +198,7 @@ PlasmaExtras.Representation {
                                     text: i18n("Tokens (5h):")
                                     font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                                     opacity: 0.75
-                                    implicitWidth: 100
+                                    Layout.preferredWidth: 100
                                 }
 
                                 PlasmaComponents.ProgressBar {
@@ -209,7 +209,7 @@ PlasmaExtras.Representation {
                                 PlasmaComponents.Label {
                                     text: (state.tokensPercent || 0) + "%"
                                     font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                    implicitWidth: 38
+                                    Layout.preferredWidth: 38
                                     horizontalAlignment: Text.AlignRight
                                 }
                             }
@@ -223,7 +223,7 @@ PlasmaExtras.Representation {
                                     text: i18n("Requests:")
                                     font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                                     opacity: 0.75
-                                    implicitWidth: 100
+                                    Layout.preferredWidth: 100
                                 }
 
                                 PlasmaComponents.ProgressBar {
@@ -236,7 +236,7 @@ PlasmaExtras.Representation {
                                                                 + (state.timeRemaining || 0)
                                     text: (state.timeUsage || 0) + " / " + total
                                     font.pixelSize: Kirigami.Theme.smallFont.pixelSize
-                                    implicitWidth: 60
+                                    Layout.preferredWidth: 60
                                     horizontalAlignment: Text.AlignRight
                                 }
                             }
