@@ -6,8 +6,8 @@ import org.kde.plasma.components as PlasmaComponents
 import org.kde.kirigami as Kirigami
 
 // Keys configuration page — dynamically add/remove key slots.
-// Values are written directly to Plasmoid.configuration so changes
-// take effect immediately (no Apply button required for these fields).
+// Uses the cfg_ prefix convention so Plasma detects changes and enables
+// the Apply / OK buttons in the settings dialog correctly.
 
 Kirigami.ScrollablePage {
     id: keysPage
@@ -17,12 +17,17 @@ Kirigami.ScrollablePage {
     topPadding:    Kirigami.Units.smallSpacing
     bottomPadding: Kirigami.Units.largeSpacing
 
-    // ── Local model populated once from config ────────────────────────────
+    // cfg_ property auto-synced by the Plasma config system.
+    // Plasma populates it from Plasmoid.configuration.keysJson before the
+    // page is shown, and writes it back when the user clicks Apply / OK.
+    property string cfg_keysJson: "[]"
+
+    // ── Local model populated once from cfg_keysJson ──────────────────────
     ListModel { id: keysModel }
 
     Component.onCompleted: {
         try {
-            const arr = JSON.parse(Plasmoid.configuration.keysJson || "[]")
+            const arr = JSON.parse(cfg_keysJson || "[]")
             const list = Array.isArray(arr) ? arr : []
             for (const k of list) {
                 keysModel.append({
@@ -50,7 +55,7 @@ Kirigami.ScrollablePage {
                 pollIntervalMinutes: e.pollIntervalMinutes
             })
         }
-        Plasmoid.configuration.keysJson = JSON.stringify(arr)
+        cfg_keysJson = JSON.stringify(arr)
     }
 
     // ── Layout ────────────────────────────────────────────────────────────
