@@ -261,63 +261,106 @@ PlasmoidItem {
     Component.onCompleted: Qt.callLater(refreshAll)
 
     // ── Compact representation (panel icon) ───────────────────────────────
-    compactRepresentation: Item {
+    compactRepresentation: MouseArea {
         id: compactRoot
+        hoverEnabled: true
 
-        Kirigami.Icon {
-            anchors.fill: parent
-            anchors.margins: Math.round(Math.min(parent.width, parent.height) * 0.1)
-            source: "network-server"
+        // Request enough width to show icon + inline key labels
+        implicitWidth: compactRow.implicitWidth + 2 * Kirigami.Units.smallSpacing
 
-            // Status indicator dot
-            Rectangle {
-                width:  Math.round(parent.width  * 0.35)
-                height: width
-                radius: width / 2
-                anchors.right:        parent.right
-                anchors.bottom:       parent.bottom
-                anchors.rightMargin:  -2
-                anchors.bottomMargin: -2
-                visible: root.overallStatus !== "idle"
-                color: root.overallStatus === "ok"      ? "#22c55e"
-                     : root.overallStatus === "error"   ? "#ef4444"
-                     : root.overallStatus === "loading" ? "#f59e0b"
-                     : "transparent"
-                border.color: Qt.rgba(0, 0, 0, 0.4)
-                border.width: 1
+        onClicked: {
+            // If nothing is configured, go straight to settings
+            if (!root.hasAnyEnabledKey()) {
+                Plasmoid.internalAction("configure").trigger()
+            } else {
+                Plasmoid.expanded = !Plasmoid.expanded
             }
         }
 
-        MouseArea {
+        RowLayout {
+            id: compactRow
             anchors.fill: parent
-            hoverEnabled: true
-            onClicked: {
-                // If nothing is configured, go straight to settings
-                if (!root.hasAnyEnabledKey()) {
-                    Plasmoid.internalAction("configure").trigger()
-                } else {
-                    Plasmoid.expanded = !Plasmoid.expanded
+            anchors.margins: Kirigami.Units.smallSpacing
+            spacing: Kirigami.Units.smallSpacing
+
+            // ── Icon with status dot ──────────────────────────────────────
+            Item {
+                readonly property int iconSize: Math.min(compactRoot.height,
+                                                         Kirigami.Units.iconSizes.medium)
+                Layout.preferredWidth:  iconSize
+                Layout.preferredHeight: iconSize
+                Layout.alignment: Qt.AlignVCenter
+
+                Kirigami.Icon {
+                    anchors.fill: parent
+                    anchors.margins: Math.round(parent.width * 0.1)
+                    source: "network-server"
+
+                    Rectangle {
+                        width:  Math.round(parent.width  * 0.35)
+                        height: width
+                        radius: width / 2
+                        anchors.right:        parent.right
+                        anchors.bottom:       parent.bottom
+                        anchors.rightMargin:  -2
+                        anchors.bottomMargin: -2
+                        visible: root.overallStatus !== "idle"
+                        color: root.overallStatus === "ok"      ? "#22c55e"
+                             : root.overallStatus === "error"   ? "#ef4444"
+                             : root.overallStatus === "loading" ? "#f59e0b"
+                             : "transparent"
+                        border.color: Qt.rgba(0, 0, 0, 0.4)
+                        border.width: 1
+                    }
                 }
             }
 
-            Controls.ToolTip {
-                text: {
-                    const lines = ["GLM Tray"]
-                    for (let i = 0; i < root.keyList.length; i++) {
-                        const k = root.keyList[i]
-                        if (k.enabled && (k.apiKey || "") !== "") {
-                            const st = root.keyStates[i] || {}
-                            const name = k.name || ("Key " + (i + 1))
-                            lines.push(name + ": " + (st.tokensPercent || 0) + "% tokens"
-                                       + (st.status === "error" ? " ⚠" : ""))
+            // ── Per-key inline labels (only when keys are configured) ─────
+            ColumnLayout {
+                visible: root.hasAnyEnabledKey()
+                Layout.alignment: Qt.AlignVCenter
+                spacing: 0
+
+                Repeater {
+                    model: root.keyList.length
+
+                    delegate: PlasmaComponents.Label {
+                        readonly property var k:  root.keyList[index]  || {}
+                        readonly property var st: root.keyStates[index] || {}
+                        readonly property bool active: (k.enabled === true)
+                                                       && (k.apiKey || "") !== ""
+                        visible: active
+                        text: {
+                            const name = k.name || i18n("Key %1", index + 1)
+                            if (st.status === "loading") return name + ": …"
+                            if (st.status === "error")   return name + ": ⚠"
+                            if (st.status === "ok")
+                                return name + ": " + (st.tokensPercent || 0) + "%"
+                            return name + ": —"
                         }
+                        font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                     }
-                    return lines.length > 1 ? lines.join("\n")
-                                            : i18n("GLM Tray — no keys configured")
                 }
-                visible: parent.containsMouse
-                delay: 600
             }
+        }
+
+        Controls.ToolTip {
+            text: {
+                const lines = ["GLM Tray"]
+                for (let i = 0; i < root.keyList.length; i++) {
+                    const k = root.keyList[i]
+                    if (k.enabled && (k.apiKey || "") !== "") {
+                        const st = root.keyStates[i] || {}
+                        const name = k.name || ("Key " + (i + 1))
+                        lines.push(name + ": " + (st.tokensPercent || 0) + "% tokens"
+                                   + (st.status === "error" ? " ⚠" : ""))
+                    }
+                }
+                return lines.length > 1 ? lines.join("\n")
+                                        : i18n("GLM Tray — no keys configured")
+            }
+            visible: parent.containsMouse
+            delay: 600
         }
     }
 
