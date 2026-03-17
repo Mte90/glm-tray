@@ -10,36 +10,14 @@ PlasmaExtras.Representation {
     id: fullRep
 
     // ── Properties injected from main.qml ─────────────────────────────────
-    property var keyStatesData: ({
-        1: { status: "idle", tokensPercent: 0, timePercent: 0, timeUsage: 0,
-             timeRemaining: 0, nextResetMs: 0, level: "", errorMsg: "",
-             lastUpdated: "", warmingUp: false },
-        2: { status: "idle", tokensPercent: 0, timePercent: 0, timeUsage: 0,
-             timeRemaining: 0, nextResetMs: 0, level: "", errorMsg: "",
-             lastUpdated: "", warmingUp: false },
-        3: { status: "idle", tokensPercent: 0, timePercent: 0, timeUsage: 0,
-             timeRemaining: 0, nextResetMs: 0, level: "", errorMsg: "",
-             lastUpdated: "", warmingUp: false },
-        4: { status: "idle", tokensPercent: 0, timePercent: 0, timeUsage: 0,
-             timeRemaining: 0, nextResetMs: 0, level: "", errorMsg: "",
-             lastUpdated: "", warmingUp: false }
-    })
+    property var keyListData:   []
+    property var keyStatesData: []
 
-    signal warmupRequested(int slot)
-    signal fetchRequested(int slot)
+    signal warmupRequested(int index)
+    signal fetchRequested(int index)
     signal refreshAllRequested()
 
     // ── Helpers ───────────────────────────────────────────────────────────
-    function slotConfig(slot) {
-        const prefix = "key" + slot
-        const apiKey = Plasmoid.configuration[prefix + "ApiKey"] || ""
-        return {
-            enabled:  (Plasmoid.configuration[prefix + "Enabled"] === true) && apiKey !== "",
-            name:     Plasmoid.configuration[prefix + "Name"]     || ("Key " + slot),
-            platform: Plasmoid.configuration[prefix + "Platform"] || "zai"
-        }
-    }
-
     function platformLabel(platform) {
         return platform === "bigmodel" ? "BigModel" : "Z.ai"
     }
@@ -108,15 +86,16 @@ PlasmaExtras.Representation {
 
             // ── Key cards ─────────────────────────────────────────────────
             Repeater {
-                model: 4
+                model: fullRep.keyListData.length
 
                 delegate: PlasmaComponents.Frame {
-                    readonly property int slotNum: index + 1
-                    readonly property var cfg:   fullRep.slotConfig(slotNum)
-                    readonly property var state: fullRep.keyStatesData[slotNum] || {}
+                    readonly property var cfg:       fullRep.keyListData[index]  || {}
+                    readonly property var state:     fullRep.keyStatesData[index] || {}
+                    readonly property bool isEnabled: (cfg.enabled === true)
+                                                      && (cfg.apiKey || "") !== ""
 
                     Layout.fillWidth: true
-                    visible: cfg.enabled
+                    visible: isEnabled
                     // collapse height when hidden so the layout stays tidy
                     Layout.topMargin:    visible ? Kirigami.Units.smallSpacing / 2 : 0
                     Layout.bottomMargin: visible ? Kirigami.Units.smallSpacing / 2 : 0
@@ -143,7 +122,7 @@ PlasmaExtras.Representation {
 
                             // Key name
                             PlasmaComponents.Label {
-                                text: cfg.name
+                                text: cfg.name || i18n("Key %1", index + 1)
                                 font.bold: true
                                 Layout.fillWidth: true
                                 elide: Text.ElideRight
@@ -151,7 +130,7 @@ PlasmaExtras.Representation {
 
                             // Platform badge
                             PlasmaComponents.Label {
-                                text: fullRep.platformLabel(cfg.platform)
+                                text: fullRep.platformLabel(cfg.platform || "zai")
                                 font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                                 color: Kirigami.Theme.disabledTextColor
                             }
@@ -285,7 +264,7 @@ PlasmaExtras.Representation {
                                 enabled: !state.warmingUp
                                          && state.status !== "loading"
                                 Layout.fillWidth: true
-                                onClicked: fullRep.warmupRequested(slotNum)
+                                onClicked: fullRep.warmupRequested(index)
                             }
 
                             PlasmaComponents.Button {
@@ -294,7 +273,7 @@ PlasmaExtras.Representation {
                                 enabled: state.status !== "loading"
                                          && !state.warmingUp
                                 Layout.fillWidth: true
-                                onClicked: fullRep.fetchRequested(slotNum)
+                                onClicked: fullRep.fetchRequested(index)
                             }
                         }
                     }
@@ -303,12 +282,9 @@ PlasmaExtras.Representation {
 
             // ── Empty state ───────────────────────────────────────────────
             PlasmaExtras.PlaceholderMessage {
-                visible: {
-                    for (let i = 1; i <= 4; i++) {
-                        if (fullRep.slotConfig(i).enabled) return false
-                    }
-                    return true
-                }
+                visible: !fullRep.keyListData.some(function(k) {
+                    return k.enabled && (k.apiKey || "") !== ""
+                })
                 Layout.fillWidth: true
                 Layout.topMargin:    Kirigami.Units.largeSpacing
                 Layout.bottomMargin: Kirigami.Units.largeSpacing
@@ -321,3 +297,4 @@ PlasmaExtras.Representation {
         }
     }
 }
+

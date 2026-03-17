@@ -11,6 +11,7 @@ import org.kde.kirigami as Kirigami
 
 Kirigami.FormLayout {
     id: generalPage
+    Layout.topMargin: Kirigami.Units.largeSpacing
 
     // cfg_ properties are auto-synced by the Plasma config system
     property int cfg_defaultPollIntervalMinutes: 30

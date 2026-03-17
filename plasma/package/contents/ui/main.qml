@@ -22,40 +22,45 @@ PlasmoidItem {
         }
     })
 
-    // ── Config accessor (reads from Plasmoid.configuration) ───────────────
-    function keyConfig(slot) {
-        const prefix = "key" + slot
-        const apiKey = Plasmoid.configuration[prefix + "ApiKey"] || ""
-        return {
-            slot: slot,
-            enabled: (Plasmoid.configuration[prefix + "Enabled"] === true) && apiKey !== "",
-            name: Plasmoid.configuration[prefix + "Name"] || ("Key " + slot),
-            apiKey: apiKey,
-            platform: Plasmoid.configuration[prefix + "Platform"] || "zai",
-            pollIntervalMinutes: Plasmoid.configuration[prefix + "PollIntervalMinutes"]
-                                 || Plasmoid.configuration.defaultPollIntervalMinutes
-                                 || 30
+    // ── Parsed key list from configuration ────────────────────────────────
+    readonly property var keyList: {
+        try {
+            const arr = JSON.parse(Plasmoid.configuration.keysJson || "[]")
+            return Array.isArray(arr) ? arr : []
+        } catch(e) {
+            console.warn("GLM Tray: failed to parse keysJson:", e)
+            return []
         }
     }
 
-    // ── Runtime state (keyed by slot number 1–4) ──────────────────────────
-    property var keyStates: ({
-        1: { slot: 1, status: "idle", tokensPercent: 0, timePercent: 0,
-             timeUsage: 0, timeRemaining: 0, nextResetMs: 0, level: "",
-             errorMsg: "", lastUpdated: "", warmingUp: false },
-        2: { slot: 2, status: "idle", tokensPercent: 0, timePercent: 0,
-             timeUsage: 0, timeRemaining: 0, nextResetMs: 0, level: "",
-             errorMsg: "", lastUpdated: "", warmingUp: false },
-        3: { slot: 3, status: "idle", tokensPercent: 0, timePercent: 0,
-             timeUsage: 0, timeRemaining: 0, nextResetMs: 0, level: "",
-             errorMsg: "", lastUpdated: "", warmingUp: false },
-        4: { slot: 4, status: "idle", tokensPercent: 0, timePercent: 0,
-             timeUsage: 0, timeRemaining: 0, nextResetMs: 0, level: "",
-             errorMsg: "", lastUpdated: "", warmingUp: false }
-    })
+    // ── Runtime state (arrays, parallel to keyList by index) ──────────────
+    property var keyStates: []
+    property var nextPollTimes: []
 
-    // Next scheduled poll time per slot (ms epoch)
-    property var nextPollTimes: ({ 1: 0, 2: 0, 3: 0, 4: 0 })
+    // Reconcile runtime arrays whenever the key list changes
+    onKeyListChanged: {
+        const newStates     = []
+        const newPollTimes  = []
+        for (let i = 0; i < keyList.length; i++) {
+            newStates.push(i < keyStates.length
+                ? keyStates[i]
+                : { status: "idle", tokensPercent: 0, timePercent: 0,
+                    timeUsage: 0, timeRemaining: 0, nextResetMs: 0,
+                    level: "", errorMsg: "", lastUpdated: "", warmingUp: false })
+            newPollTimes.push(i < nextPollTimes.length ? nextPollTimes[i] : 0)
+        }
+        keyStates    = newStates
+        nextPollTimes = newPollTimes
+    }
+
+    // ── Helper: is any key configured and enabled? ────────────────────────
+    function hasAnyEnabledKey() {
+        for (let i = 0; i < keyList.length; i++) {
+            const k = keyList[i]
+            if (k.enabled && (k.apiKey || "") !== "") return true
+        }
+        return false
+    }
 
     // ── Polling timer ─────────────────────────────────────────────────────
     Timer {
@@ -65,70 +70,80 @@ PlasmoidItem {
         running: true
         onTriggered: {
             const now = Date.now()
-            for (let slot = 1; slot <= 4; slot++) {
-                const cfg = root.keyConfig(slot)
-                if (cfg.enabled && now >= root.nextPollTimes[slot]) {
-                    root.fetchQuota(slot)
+            for (let i = 0; i < root.keyList.length; i++) {
+                const k = root.keyList[i]
+                if (k.enabled && (k.apiKey || "") !== "" &&
+                        now >= (root.nextPollTimes[i] || 0)) {
+                    root.fetchQuota(i)
                 }
             }
         }
     }
 
     // ── State helpers ─────────────────────────────────────────────────────
-    function updateState(slot, patch) {
-        const ns = Object.assign({}, keyStates)
-        ns[slot] = Object.assign({}, ns[slot], patch)
+    function updateState(index, patch) {
+        const ns = keyStates.slice()
+        while (ns.length <= index) {
+            ns.push({ status: "idle", tokensPercent: 0, timePercent: 0,
+                      timeUsage: 0, timeRemaining: 0, nextResetMs: 0,
+                      level: "", errorMsg: "", lastUpdated: "", warmingUp: false })
+        }
+        ns[index] = Object.assign({}, ns[index], patch)
         keyStates = ns
     }
 
-    function scheduleNextPoll(slot, intervalMinutes) {
-        const np = Object.assign({}, nextPollTimes)
-        np[slot] = Date.now() + intervalMinutes * 60 * 1000
+    function scheduleNextPoll(index, intervalMinutes) {
+        const np = nextPollTimes.slice()
+        while (np.length <= index) np.push(0)
+        np[index] = Date.now() + intervalMinutes * 60 * 1000
         nextPollTimes = np
     }
 
     // ── API: fetch quota ──────────────────────────────────────────────────
-    function fetchQuota(slot) {
-        const cfg = keyConfig(slot)
-        if (!cfg.enabled) {
-            updateState(slot, { status: "disabled" })
+    function fetchQuota(index) {
+        const k = keyList[index]
+        if (!k || !k.enabled || !(k.apiKey || "")) {
+            updateState(index, { status: "disabled" })
             return
         }
 
-        const plat = platforms[cfg.platform] || platforms["zai"]
-        updateState(slot, { status: "loading" })
+        const intervalMinutes = k.pollIntervalMinutes
+                                || Plasmoid.configuration.defaultPollIntervalMinutes
+                                || 30
+        const plat = platforms[k.platform || "zai"] || platforms["zai"]
+        updateState(index, { status: "loading" })
 
         const xhr = new XMLHttpRequest()
         xhr.open("GET", plat.quota, true)
-        xhr.setRequestHeader("Authorization", "Bearer " + cfg.apiKey)
+        xhr.setRequestHeader("Authorization", "Bearer " + k.apiKey)
         xhr.setRequestHeader("Accept-Language", "en-US")
         xhr.timeout = 15000
 
         xhr.onreadystatechange = function() {
             if (xhr.readyState !== XMLHttpRequest.DONE) return
-            scheduleNextPoll(slot, cfg.pollIntervalMinutes)
+            scheduleNextPoll(index, intervalMinutes)
 
             if (xhr.status === 200) {
                 try {
                     const resp = JSON.parse(xhr.responseText)
                     if (resp.success && resp.data) {
-                        processQuotaResponse(slot, resp.data)
+                        processQuotaResponse(index, resp.data)
                         return
                     }
-                    updateState(slot, {
+                    updateState(index, {
                         status: "error",
                         errorMsg: resp.msg || i18n("Unexpected response"),
                         lastUpdated: Qt.formatTime(new Date(), "hh:mm")
                     })
                 } catch (e) {
-                    updateState(slot, {
+                    updateState(index, {
                         status: "error",
                         errorMsg: i18n("Parse error"),
                         lastUpdated: Qt.formatTime(new Date(), "hh:mm")
                     })
                 }
             } else {
-                updateState(slot, {
+                updateState(index, {
                     status: "error",
                     errorMsg: "HTTP " + xhr.status,
                     lastUpdated: Qt.formatTime(new Date(), "hh:mm")
@@ -137,8 +152,8 @@ PlasmoidItem {
         }
 
         xhr.onerror = function() {
-            scheduleNextPoll(slot, cfg.pollIntervalMinutes)
-            updateState(slot, {
+            scheduleNextPoll(index, intervalMinutes)
+            updateState(index, {
                 status: "error",
                 errorMsg: i18n("Network error"),
                 lastUpdated: Qt.formatTime(new Date(), "hh:mm")
@@ -148,7 +163,7 @@ PlasmoidItem {
         xhr.send()
     }
 
-    function processQuotaResponse(slot, data) {
+    function processQuotaResponse(index, data) {
         const limits = data.limits || []
         let tokensPercent = 0
         let timePercent   = 0
@@ -168,8 +183,8 @@ PlasmoidItem {
             }
         }
 
-        updateState(slot, {
-            status: "ok",
+        updateState(index, {
+            status:        "ok",
             tokensPercent: tokensPercent,
             timePercent:   timePercent,
             timeUsage:     timeUsage,
@@ -182,28 +197,29 @@ PlasmoidItem {
     }
 
     // ── API: warmup ───────────────────────────────────────────────────────
-    function warmupSlot(slot) {
-        const cfg = keyConfig(slot)
-        if (!cfg.enabled || keyStates[slot].warmingUp) return
+    function warmupSlot(index) {
+        const k = keyList[index]
+        if (!k || !k.enabled || !(k.apiKey || "")) return
+        if ((keyStates[index] || {}).warmingUp) return
 
-        const plat = platforms[cfg.platform] || platforms["zai"]
-        updateState(slot, { warmingUp: true })
+        const plat = platforms[k.platform || "zai"] || platforms["zai"]
+        updateState(index, { warmingUp: true })
 
         const xhr = new XMLHttpRequest()
         xhr.open("POST", plat.request, true)
-        xhr.setRequestHeader("Authorization", "Bearer " + cfg.apiKey)
+        xhr.setRequestHeader("Authorization", "Bearer " + k.apiKey)
         xhr.setRequestHeader("Accept-Language", "en-US")
         xhr.setRequestHeader("Content-Type", "application/json")
         xhr.timeout = 30000
 
         xhr.onreadystatechange = function() {
             if (xhr.readyState !== XMLHttpRequest.DONE) return
-            updateState(slot, { warmingUp: false })
-            Qt.callLater(function() { fetchQuota(slot) })
+            updateState(index, { warmingUp: false })
+            Qt.callLater(function() { fetchQuota(index) })
         }
 
         xhr.onerror = function() {
-            updateState(slot, { warmingUp: false })
+            updateState(index, { warmingUp: false })
         }
 
         xhr.send(JSON.stringify({
@@ -215,9 +231,9 @@ PlasmoidItem {
 
     // ── Refresh all enabled keys ──────────────────────────────────────────
     function refreshAll() {
-        for (let slot = 1; slot <= 4; slot++) {
-            const cfg = keyConfig(slot)
-            if (cfg.enabled) fetchQuota(slot)
+        for (let i = 0; i < keyList.length; i++) {
+            const k = keyList[i]
+            if (k.enabled && (k.apiKey || "") !== "") fetchQuota(i)
         }
     }
 
@@ -226,11 +242,11 @@ PlasmoidItem {
         let hasEnabled = false
         let hasError   = false
         let hasLoading = false
-        for (let i = 1; i <= 4; i++) {
-            const cfg = keyConfig(i)
-            if (cfg.enabled) {
+        for (let i = 0; i < keyList.length; i++) {
+            const k = keyList[i]
+            if (k.enabled && (k.apiKey || "") !== "") {
                 hasEnabled = true
-                const st = keyStates[i].status
+                const st = (keyStates[i] || {}).status || "idle"
                 if (st === "error")   hasError   = true
                 if (st === "loading") hasLoading = true
             }
@@ -275,16 +291,24 @@ PlasmoidItem {
         MouseArea {
             anchors.fill: parent
             hoverEnabled: true
-            onClicked: Plasmoid.expanded = !Plasmoid.expanded
+            onClicked: {
+                // If nothing is configured, go straight to settings
+                if (!root.hasAnyEnabledKey()) {
+                    Plasmoid.internalAction("configure").trigger()
+                } else {
+                    Plasmoid.expanded = !Plasmoid.expanded
+                }
+            }
 
             Controls.ToolTip {
                 text: {
                     const lines = ["GLM Tray"]
-                    for (let i = 1; i <= 4; i++) {
-                        const cfg = root.keyConfig(i)
-                        if (cfg.enabled) {
-                            const st = root.keyStates[i]
-                            lines.push(cfg.name + ": " + st.tokensPercent + "% tokens"
+                    for (let i = 0; i < root.keyList.length; i++) {
+                        const k = root.keyList[i]
+                        if (k.enabled && (k.apiKey || "") !== "") {
+                            const st = root.keyStates[i] || {}
+                            const name = k.name || ("Key " + (i + 1))
+                            lines.push(name + ": " + (st.tokensPercent || 0) + "% tokens"
                                        + (st.status === "error" ? " ⚠" : ""))
                         }
                     }
@@ -299,9 +323,11 @@ PlasmoidItem {
 
     // ── Full representation (popup) ───────────────────────────────────────
     fullRepresentation: FullRepresentation {
+        keyListData:   root.keyList
         keyStatesData: root.keyStates
-        onWarmupRequested: function(slot) { root.warmupSlot(slot) }
-        onFetchRequested:  function(slot) { root.fetchQuota(slot) }
+        onWarmupRequested:     function(index) { root.warmupSlot(index) }
+        onFetchRequested:      function(index) { root.fetchQuota(index) }
         onRefreshAllRequested: root.refreshAll()
     }
 }
+
