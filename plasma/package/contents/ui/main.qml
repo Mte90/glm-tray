@@ -265,8 +265,14 @@ PlasmoidItem {
         id: compactRoot
         hoverEnabled: true
 
-        // Request enough width to show icon + inline key labels
+        // Request enough width to show icon + inline key labels.
+        // Plasma's panel layout reads Layout.minimumWidth / Layout.preferredWidth
+        // (attached properties) to size each slot — implicitWidth alone is ignored.
+        // The extra 2 × smallSpacing accounts for the symmetric horizontal margins
+        // applied by the RowLayout's anchors.margins below.
         implicitWidth: compactRow.implicitWidth + 2 * Kirigami.Units.smallSpacing
+        Layout.minimumWidth:  implicitWidth
+        Layout.preferredWidth: implicitWidth
 
         onClicked: {
             // If nothing is configured, go straight to settings
