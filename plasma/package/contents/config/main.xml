@@ -6,9 +6,6 @@
     <kcfgfile name=""/>
 
     <group name="General">
-        <entry name="defaultPollIntervalMinutes" type="Int">
-            <default>30</default>
-        </entry>
         <entry name="keysJson" type="String">
             <default>[]</default>
         </entry>

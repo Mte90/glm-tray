@@ -8,6 +8,9 @@ import org.kde.kirigami as Kirigami
 PlasmoidItem {
     id: root
 
+    // Days threshold: a reset within this many days means the quota is weekly
+    readonly property int weeklyQuotaThresholdDays: 8
+
     // ── Platform URL definitions ──────────────────────────────────────────
     readonly property var platforms: ({
         "zai": {
@@ -46,6 +49,7 @@ PlasmoidItem {
                 ? keyStates[i]
                 : { status: "idle", tokensPercent: 0, timePercent: 0,
                     timeUsage: 0, timeRemaining: 0, nextResetMs: 0,
+                    tokensPeriod: "",
                     level: "", errorMsg: "", lastUpdated: "", warmingUp: false })
             newPollTimes.push(i < nextPollTimes.length ? nextPollTimes[i] : 0)
         }
@@ -86,6 +90,7 @@ PlasmoidItem {
         while (ns.length <= index) {
             ns.push({ status: "idle", tokensPercent: 0, timePercent: 0,
                       timeUsage: 0, timeRemaining: 0, nextResetMs: 0,
+                      tokensPeriod: "",
                       level: "", errorMsg: "", lastUpdated: "", warmingUp: false })
         }
         ns[index] = Object.assign({}, ns[index], patch)
@@ -107,9 +112,7 @@ PlasmoidItem {
             return
         }
 
-        const intervalMinutes = k.pollIntervalMinutes
-                                || Plasmoid.configuration.defaultPollIntervalMinutes
-                                || 30
+        const intervalMinutes = k.pollIntervalMinutes || 30
         const plat = platforms[k.platform || "zai"] || platforms["zai"]
         updateState(index, { status: "loading" })
 
@@ -170,17 +173,29 @@ PlasmoidItem {
         let timeUsage     = 0
         let timeRemaining = 0
         let nextResetMs   = 0
+        let tokensPeriod  = ""
 
         for (const limit of limits) {
             if (limit.type === "TOKENS_LIMIT") {
                 tokensPercent = limit.percentage    || 0
                 nextResetMs   = limit.nextResetTime || 0
+                // Capture the quota period if the API provides it
+                const raw = (limit.period || limit.granularity || "").toLowerCase()
+                if (raw === "week" || raw === "weekly") tokensPeriod = "weekly"
+                else if (raw === "month" || raw === "monthly") tokensPeriod = "monthly"
             } else if (limit.type === "TIME_LIMIT") {
                 timePercent   = limit.percentage    || 0
                 timeUsage     = limit.currentValue  || 0
                 timeRemaining = limit.remaining     || 0
                 if (!nextResetMs) nextResetMs = limit.nextResetTime || 0
             }
+        }
+
+        // Fall back to inferring the period from the reset timestamp when the
+        // API doesn't include an explicit period field.
+        if (!tokensPeriod && nextResetMs) {
+            const daysUntilReset = (nextResetMs - Date.now()) / (1000 * 60 * 60 * 24)
+            tokensPeriod = daysUntilReset <= root.weeklyQuotaThresholdDays ? "weekly" : "monthly"
         }
 
         updateState(index, {
@@ -190,6 +205,7 @@ PlasmoidItem {
             timeUsage:     timeUsage,
             timeRemaining: timeRemaining,
             nextResetMs:   nextResetMs,
+            tokensPeriod:  tokensPeriod,
             level:         data.level || "",
             errorMsg:      "",
             lastUpdated:   Qt.formatTime(new Date(), "hh:mm")
@@ -292,7 +308,7 @@ PlasmoidItem {
             // ── Icon with status dot ──────────────────────────────────────
             Item {
                 readonly property int iconSize: Math.min(compactRoot.height,
-                                                         Kirigami.Units.iconSizes.medium)
+                                                         Kirigami.Units.iconSizes.large)
                 Layout.preferredWidth:  iconSize
                 Layout.preferredHeight: iconSize
                 Layout.alignment: Qt.AlignVCenter
@@ -337,36 +353,19 @@ PlasmoidItem {
                                                        && (k.apiKey || "") !== ""
                         visible: active
                         text: {
-                            const name = k.name || i18n("Key %1", index + 1)
-                            if (st.status === "loading") return name + ": …"
-                            if (st.status === "error")   return name + ": ⚠"
+                            const name   = k.name || i18n("Key %1", index + 1)
+                            const period = st.tokensPeriod ? (" " + st.tokensPeriod) : ""
+                            if (st.status === "loading")
+                                return name + " quota: …"
+                            if (st.status === "error")
+                                return name + " quota: ⚠"
                             if (st.status === "ok")
-                                return name + ": " + (st.tokensPercent || 0) + "%"
-                            return name + ": —"
+                                return name + period + " quota: " + (st.tokensPercent || 0) + "%"
+                            return name + " quota: —"
                         }
-                        font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                     }
                 }
             }
-        }
-
-        Controls.ToolTip {
-            text: {
-                const lines = ["GLM Tray"]
-                for (let i = 0; i < root.keyList.length; i++) {
-                    const k = root.keyList[i]
-                    if (k.enabled && (k.apiKey || "") !== "") {
-                        const st = root.keyStates[i] || {}
-                        const name = k.name || ("Key " + (i + 1))
-                        lines.push(name + ": " + (st.tokensPercent || 0) + "% tokens"
-                                   + (st.status === "error" ? " ⚠" : ""))
-                    }
-                }
-                return lines.length > 1 ? lines.join("\n")
-                                        : i18n("GLM Tray — no keys configured")
-            }
-            visible: parent.containsMouse
-            delay: 600
         }
     }
 

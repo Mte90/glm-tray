@@ -58,7 +58,7 @@ Right-click the widget → **Configure GLM Tray**
 
 ### Keys tab
 
-For each of the 4 key slots you can configure:
+For each key slot you can configure:
 
 | Field | Description |
 |-------|-------------|
@@ -66,13 +66,7 @@ For each of the 4 key slots you can configure:
 | Display name | Label shown in the popup |
 | API key | Your Z.ai or BigModel API key (stored in `~/.config/plasma-org.kde.plasma.desktop-appletsrc`) |
 | Platform | **Z.ai** or **BigModel** |
-| Poll interval | How often to refresh quota data (minutes) |
-
-### General tab
-
-| Field | Description |
-|-------|-------------|
-| Default poll interval | Fallback interval used when a key's individual poll interval is not set |
+| Poll interval | How often to refresh quota data (minutes, default: 30) |
 
 ## Architecture
 
@@ -90,14 +84,13 @@ plasma/
             ├── main.qml             # Root PlasmoidItem — logic + compact icon
             ├── FullRepresentation.qml  # Expanded popup UI
             └── configpages/
-                ├── KeysConfig.qml   # Per-key configuration form
-                └── GeneralConfig.qml   # Global settings form
+                └── KeysConfig.qml   # Per-key configuration form
 ```
 
 ### Data flow
 
 ```
-Plasmoid.configuration  ←→  KeysConfig / GeneralConfig pages
+Plasmoid.configuration  ←→  KeysConfig page
         │
         ▼
    main.qml (keyConfig() helper)

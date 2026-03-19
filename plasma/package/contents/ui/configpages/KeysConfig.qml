@@ -220,7 +220,7 @@ Kirigami.ScrollablePage {
                     name:                "",
                     apiKey:              "",
                     platform:            "zai",
-                    pollIntervalMinutes: Plasmoid.configuration.defaultPollIntervalMinutes || 30
+                    pollIntervalMinutes: 30
                 })
                 keysPage.saveKeys()
             }
