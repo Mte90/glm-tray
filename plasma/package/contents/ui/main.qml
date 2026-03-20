@@ -10,6 +10,7 @@ PlasmoidItem {
 
     // Days threshold: a reset within this many days means the quota is weekly
     readonly property int weeklyQuotaThresholdDays: 8
+    readonly property int msPerDay: 1000 * 60 * 60 * 24
 
     // ── Platform URL definitions ──────────────────────────────────────────
     readonly property var platforms: ({
@@ -194,7 +195,7 @@ PlasmoidItem {
         // Fall back to inferring the period from the reset timestamp when the
         // API doesn't include an explicit period field.
         if (!tokensPeriod && nextResetMs) {
-            const daysUntilReset = (nextResetMs - Date.now()) / (1000 * 60 * 60 * 24)
+            const daysUntilReset = (nextResetMs - Date.now()) / root.msPerDay
             tokensPeriod = daysUntilReset <= root.weeklyQuotaThresholdDays ? "weekly" : "monthly"
         }
 
@@ -281,7 +282,7 @@ PlasmoidItem {
         id: compactRoot
         hoverEnabled: true
 
-        // Request enough width to show icon + inline key labels.
+        // Request enough width to show the inline key labels (or the fallback icon).
         // Plasma's panel layout reads Layout.minimumWidth / Layout.preferredWidth
         // (attached properties) to size each slot — implicitWidth alone is ignored.
         // The extra 2 × smallSpacing accounts for the symmetric horizontal margins
@@ -305,8 +306,9 @@ PlasmoidItem {
             anchors.margins: Kirigami.Units.smallSpacing
             spacing: Kirigami.Units.smallSpacing
 
-            // ── Icon with status dot ──────────────────────────────────────
+            // ── Icon with status dot (shown only when no key is configured) ──
             Item {
+                visible: !root.hasAnyEnabledKey()
                 readonly property int iconSize: Math.min(compactRoot.height,
                                                          Kirigami.Units.iconSizes.large)
                 Layout.preferredWidth:  iconSize
