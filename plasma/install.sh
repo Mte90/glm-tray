@@ -13,8 +13,8 @@ PACKAGE_DIR="${SCRIPT_DIR}/package"
 
 if [[ "${1:-}" == "--remove" ]]; then
     echo "Removing plasmoid '${PLASMOID_ID}'…"
-    plasmapkg2 --remove "${PLASMOID_ID}" 2>/dev/null \
-        || kpackagetool6 --remove "${PLASMOID_ID}" 2>/dev/null \
+    kpackagetool6 --remove "${PLASMOID_ID}" 2>/dev/null \
+        || plasmapkg2 --remove "${PLASMOID_ID}" 2>/dev/null \
         || { echo "Error: could not remove plasmoid (neither plasmapkg2 nor kpackagetool6 found)"; exit 1; }
     echo "Done. You may need to restart Plasma: kquitapp6 plasmashell && kstart plasmashell"
     exit 0
