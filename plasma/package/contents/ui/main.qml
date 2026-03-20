@@ -282,6 +282,9 @@ PlasmoidItem {
         id: compactRoot
         hoverEnabled: true
 
+        // Claim the full panel height so the content is vertically centred.
+        Layout.fillHeight: true
+
         // Request enough width to show the inline key labels (or the fallback icon).
         // Plasma's panel layout reads Layout.minimumWidth / Layout.preferredWidth
         // (attached properties) to size each slot — implicitWidth alone is ignored.
