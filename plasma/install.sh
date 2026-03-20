@@ -24,11 +24,9 @@ echo "Installing plasmoid from '${PACKAGE_DIR}'…"
 
 # Try kpackagetool6 (Plasma 6) first, fall back to plasmapkg2 (Plasma 5)
 if command -v kpackagetool6 &>/dev/null; then
-    kpackagetool6 --type Plasma/Applet --install "${PACKAGE_DIR}" 2>/dev/null \
-        || kpackagetool6 --type Plasma/Applet --upgrade "${PACKAGE_DIR}"
+    kpackagetool6 --type Plasma/Applet --install "${PACKAGE_DIR}"
 elif command -v plasmapkg2 &>/dev/null; then
-    plasmapkg2 --type Plasma/Applet --install "${PACKAGE_DIR}" 2>/dev/null \
-        || plasmapkg2 --type Plasma/Applet --upgrade "${PACKAGE_DIR}"
+    plasmapkg2 --type Plasma/Applet --install "${PACKAGE_DIR}"
 else
     echo "Error: neither kpackagetool6 nor plasmapkg2 found."
     echo "Please install the plasma-framework or plasma6-framework package."
